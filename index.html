@@ -379,7 +379,7 @@ let memoData=[
 let _AC=null,_MG=null,_ambBus=null,_layBus=null,_layWarmth=null,_layRevConv=null,_layRevWet=null,_uiBus=null,isMuted=false;
 let ambNodes=[],layNodes=[],ambDial=null,layDial=null,layerStarted=false,scenePaused=false;
 let shimmerState=null;
-let layParams={sentenceCount:1,scale:'major'}; // reactive: updated after each analysis
+let layParams={wordTier:1,scale:'major'}; // reactive: updated after each analysis (wordTier = ceil(min(words,30)/7))
 let layBeatOrigin=0; // AudioContext time when layer started — anchors the beat grid
 function snapToBeat(b){if(!layBeatOrigin||b<=0)return now()+.05;const n=Math.ceil((now()-layBeatOrigin)/b+.02);return layBeatOrigin+n*b;}
 const AMB_VOL=0.62,AMB_VOL_DUCK=0.36,LAY_VOL=1.1;
@@ -602,10 +602,10 @@ function scheduleDream(n,nd,dest){
   let stopped=false;
   function step(){
     if(stopped||!rdy())return;
-    const{sentenceCount,scale}=layParams;
-    const sentenceMult=Math.max(0.5,1-(sentenceCount-1)*.12);
-    // chord size grows with sentence count — 1 sentence = single notes only
-    const maxChord=Math.min(cfg.chordMax,sentenceCount);
+    const{wordTier,scale}=layParams;
+    const sentenceMult=Math.max(0.5,1-(wordTier-1)*.12);
+    // chord size grows every 7 words — 1-7 words = single notes only
+    const maxChord=Math.min(cfg.chordMax,wordTier);
     const chordSize=1+Math.floor(Math.random()*maxChord);
     const used=new Set();
     for(let i=0;i<chordSize;i++){
@@ -663,12 +663,12 @@ function scheduleVibe(n,nd,dest){
   const amp=cfg.amp*.20;let stopped=false;
   function step(){
     if(stopped||!rdy())return;
-    const{sentenceCount,scale}=layParams;
-    const sentenceMult=Math.max(0.5,1-(sentenceCount-1)*.12);
+    const{wordTier,scale}=layParams;
+    const sentenceMult=Math.max(0.5,1-(wordTier-1)*.12);
     const chordTable=scale==='minor'?VIBE_CHORDS_MINOR:VIBE_CHORDS;
     const shapes=chordTable[n]||[[0]];
     const rawShape=shapes[Math.floor(Math.random()*shapes.length)];
-    const shape=rawShape.slice(0,Math.min(rawShape.length,sentenceCount)); // fewer notes with less input
+    const shape=rawShape.slice(0,Math.min(rawShape.length,wordTier)); // fewer notes with less input
     // arpeggio gap varies by line — low lines slow & meditative, high lines quick & bright
     const arpGap=n<=3?0.22:n<=6?0.14:0.08;
     const t=now()+.05;
@@ -815,11 +815,12 @@ async function analyseJ(text){
     isAnalysing=false;const el2=document.getElementById('s2-reading');if(el2)el2.classList.remove('on');
     // enable save only after analysis runs
     const sv2=document.getElementById('s2-save');if(sv2)sv2.disabled=false;
-    // update reactive layer params: sentence count tightens timing; sentiment sets scale
-    const sentenceCount=(text.match(/[.!?。]/g)||[]).length||1;
+    // update reactive layer params: word count (capped at 30) tightens timing in steps of 7; sentiment sets scale
+    const wordCount=text.trim()?text.trim().split(/\s+/).length:0;
+    const wordTier=Math.max(1,Math.ceil(Math.min(wordCount,30)/7));
     const sentiment=lastColour?.sentiment||'neutral';
     const scale=sentiment==='negative'?'minor':'major';
-    layParams={sentenceCount,scale};
+    layParams={wordTier,scale};
     if(!layerStarted){startLayer(selFreq);layerStarted=true;}
     else if(rdy()){const lvl=Math.min(1,.6+text.length/420);_layBus.gain.cancelScheduledValues(now());_layBus.gain.linearRampToValueAtTime((scenePaused?0:LAY_VOL)*lvl,now()+1.4);}
   }
@@ -847,7 +848,7 @@ function goS2(){
   const sv=document.getElementById('s2-save');if(sv){sv.style.backgroundColor=hex;sv.disabled=true;}
   buildBars('s2-bars');document.getElementById('s2-bpm').textContent=`${BPM[selFreq-1]||70} BPM`;
   stopLayer(.8);layerStarted=false;scenePaused=false;shimmerReset();
-  layParams={sentenceCount:1,scale:'major'}; // reset reactive params for new session
+  layParams={wordTier:1,scale:'major'}; // reset reactive params for new session
   if(rdy()){_ambBus.gain.cancelScheduledValues(now());_ambBus.gain.setTargetAtTime(AMB_VOL,now(),.4);}
   startAmbient(selFreq);
   barOn=true;barHex=hex;runBars('s2-bars');

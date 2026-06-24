@@ -397,6 +397,17 @@ function getAC(){
   return _AC;
 }
 function rdy(){return _AC&&_MG&&_ambBus&&_layBus&&_AC.state!=='closed';}
+// iOS/Android require the AudioContext to be resumed AND actually play something
+// synchronously inside the very first user gesture, or it can stay silently suspended.
+let _audioUnlocked=false;
+function unlockAudio(){
+  if(_audioUnlocked)return;_audioUnlocked=true;
+  const ac=getAC();if(!ac)return;
+  if(ac.state==='suspended')ac.resume().catch(()=>{});
+  try{const b=ac.createBuffer(1,1,22050);const s=ac.createBufferSource();s.buffer=b;s.connect(ac.destination);s.start(0);}catch(e){}
+}
+document.addEventListener('touchstart',unlockAudio,{once:true,passive:true});
+document.addEventListener('mousedown',unlockAudio,{once:true});
 function now(){return _AC?_AC.currentTime:0;}
 function noiseBuf(dur){const len=_AC.sampleRate*dur,buf=_AC.createBuffer(1,len,_AC.sampleRate);const d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;return buf;}
 function mkRev(dur,dec){if(!rdy())return null;const len=_AC.sampleRate*dur,buf=_AC.createBuffer(2,len,_AC.sampleRate);for(let c=0;c<2;c++){const d=buf.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,dec);}const cv=_AC.createConvolver();cv.buffer=buf;return cv;}
